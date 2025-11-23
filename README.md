@@ -1,9 +1,6 @@
 # Jellysterr
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Docker](https://img.shields.io/badge/docker-ready-green.svg)
-![React](https://img.shields.io/badge/react-v18-61dafb.svg)
-![TypeScript](https://img.shields.io/badge/typescript-v5-3178c6.svg)
+![License](https://img.shields.io/github/license/garnajee/Jellysterr)
 
 A lightweight, high-performance, and secure frontend interface for Jellyfin media servers. Built with React, Vite, and TailwindCSS, this client focuses on a streamlined user experience, advanced metadata integration, and responsive design for all devices.
 
