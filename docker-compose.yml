@@ -1,0 +1,14 @@
+services:
+  jellysterr:
+    container_name: jellysterr
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_JELLYFIN_URL=${JELLYFIN_URL}
+        - VITE_APP_LANGUAGE=${APP_LANGUAGE}
+    environment:
+      - TMDB_API_KEY=${TMDB_API_KEY}
+    ports:
+      - "3000:80"

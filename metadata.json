@@ -1,0 +1,5 @@
+{
+  "name": "Jellysterr",
+  "description": "A lightweight frontend interface for Jellyfin media servers. It focuses on media data only.",
+  "requestFramePermissions": []
+}
