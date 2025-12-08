@@ -7,18 +7,30 @@ import { MediaModal } from './components/MediaModal';
 import { LogOut, LayoutGrid, List as ListIcon, Server, Film, Search, Filter, X, Check, Eye, EyeOff, Dice5 } from 'lucide-react';
 import { t } from './src/i18n'; 
 
+declare global {
+  interface Window {
+    env: any;
+  }
+}
+
 const getEnv = (key: string) => {
+  if (window.env && window.env[key] && !window.env[key].startsWith('__')) {
+    return window.env[key];
+  }
   const meta = import.meta as any;
   if (meta && meta.env) { return meta.env[key] || ''; }
   return '';
 };
 
-const ENV_SERVER_URL = getEnv('VITE_JELLYFIN_URL');
+const ENV_SERVER_URL = getEnv('JELLYFIN_URL');
 const ENV_TMDB_KEY = ""; 
 
 // --- Login Page ---
 const LoginPage: React.FC<{ onLogin: (u: User, url: string) => void }> = ({ onLogin }) => {
   const [server, setServer] = useState(() => {
+      if (ENV_SERVER_URL && ENV_SERVER_URL.trim() !== '') {
+          return ENV_SERVER_URL;
+      }
       const cached = localStorage.getItem('jellyfin_url');
       return cached && cached !== "undefined" ? cached : ENV_SERVER_URL;
   });

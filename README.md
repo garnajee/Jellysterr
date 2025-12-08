@@ -47,8 +47,8 @@ These variables are used during the build process to configure the React applica
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `VITE_JELLYFIN_URL` | The full URL of your Jellyfin server. | Required |
-| `VITE_APP_LANGUAGE` | The ISO 639-1 language code for the UI and metadata. | `fr` |
+| `JELLYFIN_URL` | The full URL of your Jellyfin server. | Required |
+| `APP_LANGUAGE` | The ISO 639-1 language code for the UI and metadata. | `fr` |
 
 ### Environment Variables (Runtime)
 
@@ -69,7 +69,7 @@ To run the project locally without Docker for development purposes:
     ```
 3.  Create a `.env` file in the root directory:
     ```env
-    VITE_JELLYFIN_URL=http://your-jellyfin-url:8096
+    JELLYFIN_URL=http://your-jellyfin-url:8096
     # Note: In dev mode, you must temporarily hardcode the API key in App.tsx 
     # or set up a local proxy, as the Nginx proxy is not active.
     ```

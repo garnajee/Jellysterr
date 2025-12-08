@@ -5,10 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - VITE_JELLYFIN_URL=${JELLYFIN_URL}
-        - VITE_APP_LANGUAGE=${APP_LANGUAGE}
     environment:
+      - JELLYFIN_URL=${JELLYFIN_URL}
+      - APP_LANGUAGE=${APP_LANGUAGE}
       - TMDB_API_KEY=${TMDB_API_KEY}
     ports:
       - "3000:80"

@@ -1,7 +1,7 @@
 import fr from './locales/fr.json';
 import en from './locales/en.json';
 
-const LANG = import.meta.env.VITE_APP_LANGUAGE || 'fr';
+const LANG = import.meta.env.APP_LANGUAGE || 'fr';
 
 const dictionary: any = LANG === 'en' ? en : fr;
 

@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const processEnv = { ...process.env, ...env };
     
-    const lang = processEnv.VITE_APP_LANGUAGE || 'fr';
+    const lang = processEnv.APP_LANGUAGE || 'fr';
 
     console.log("BUILD CONFIG -> LANGUAGE:", lang);
 
@@ -14,8 +14,8 @@ export default defineConfig(({ mode }) => {
       server: { port: 3000, host: '0.0.0.0' },
       plugins: [react()],
       define: {
-        'import.meta.env.VITE_APP_LANGUAGE': JSON.stringify(lang),
-        'import.meta.env.VITE_JELLYFIN_URL': JSON.stringify(processEnv.VITE_JELLYFIN_URL),
+        'import.meta.env.JELLYFIN_URL': JSON.stringify(processEnv.JELLYFIN_URL),
+        'import.meta.env.APP_LANGUAGE': JSON.stringify(lang),
       },
       resolve: { alias: { '@': path.resolve(__dirname, '.') } }
     };

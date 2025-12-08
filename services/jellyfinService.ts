@@ -134,7 +134,7 @@ export const getUserImageUrl = (serverUrl: string, userId: string, tag?: string,
 };
 
 export const fetchTmdbDetails = async (ignoredApiKey: string | undefined, type: 'movie' | 'tv', tmdbId: string) => {
-    const appLang = import.meta.env.VITE_APP_LANGUAGE || 'fr';
+    const appLang = import.meta.env.APP_LANGUAGE || 'fr';
     try {
         const url = `/tmdb/${type}/${tmdbId}?language=${appLang}&append_to_response=external_ids,credits,videos,watch/providers`;
         const res = await fetch(url);
