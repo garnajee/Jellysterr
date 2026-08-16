@@ -1,13 +1,11 @@
-FROM node:20-alpine as build
+FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 
-ARG JELLYFIN_URL
-ARG APP_LANGUAGE
+ARG APP_LANGUAGE=fr
 
-ENV JELLYFIN_URL=$JELLYFIN_URL
 ENV APP_LANGUAGE=$APP_LANGUAGE
 
 RUN npm run build
@@ -20,8 +18,6 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 80
-
-#CMD ["/bin/sh", "-c", "sed -i \"s|__JELLYFIN_URL__|$JELLYFIN_URL|g\" /usr/share/nginx/html/index.html && nginx -g 'daemon off;'"]
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

@@ -2,42 +2,79 @@ import React from 'react';
 import { BaseItem } from '../types';
 import { getImageUrl } from '../services/jellyfinService';
 import { Calendar, Clock, Check } from 'lucide-react';
+import { t } from '../src/i18n';
+import { ProgressiveImage } from './ProgressiveImage';
 
 interface MediaCardProps {
   item: BaseItem;
   serverUrl: string;
   viewMode: 'grid' | 'list';
   onClick: (item: BaseItem) => void;
+  onPrefetch?: (item: BaseItem) => void;
+  priority?: boolean;
 }
 
-export const MediaCard: React.FC<MediaCardProps> = ({ item, serverUrl, viewMode, onClick }) => {
-  const width = viewMode === 'grid' ? 400 : 200;
-  const imageUrl = getImageUrl(serverUrl, item.Id, item.ImageTags?.Primary, 'Primary', width) + "&quality=90&format=webp";
+export const MediaCard: React.FC<MediaCardProps> = React.memo(({ item, serverUrl, viewMode, onClick, onPrefetch, priority = false }) => {
+  const prefetchTimer = React.useRef<number | null>(null);
+  const width = viewMode === 'grid' ? 360 : 180;
+  const imageUrl = getImageUrl(serverUrl, item.Id, item.ImageTags?.Primary, 'Primary', width, 72);
   
-  const year = item.ProductionYear || (item.PremiereDate ? new Date(item.PremiereDate).getFullYear() : 'N/A');
+  const year = item.ProductionYear || (item.PremiereDate ? new Date(item.PremiereDate).getFullYear() : t('not_available'));
   
   const runTimeMinutes = item.RunTimeTicks ? Math.round(item.RunTimeTicks / 10000000 / 60) : 0;
   const duration = runTimeMinutes > 0 ? `${Math.floor(runTimeMinutes/60)}h ${runTimeMinutes%60}m` : '';
 
   const isPlayed = item.UserData?.Played || false;
 
+  React.useEffect(() => () => {
+    if (prefetchTimer.current !== null) window.clearTimeout(prefetchTimer.current);
+  }, []);
+
+  const schedulePrefetch = () => {
+    if (!onPrefetch || prefetchTimer.current !== null) return;
+    prefetchTimer.current = window.setTimeout(() => {
+      prefetchTimer.current = null;
+      onPrefetch(item);
+    }, 120);
+  };
+
+  const cancelPrefetch = () => {
+    if (prefetchTimer.current === null) return;
+    window.clearTimeout(prefetchTimer.current);
+    prefetchTimer.current = null;
+  };
+
   if (viewMode === 'grid') {
     return (
       <div 
-        onClick={() => onClick(item)}
+        onClick={() => { cancelPrefetch(); onClick(item); }}
+        onMouseEnter={schedulePrefetch}
+        onMouseLeave={cancelPrefetch}
+        onFocus={schedulePrefetch}
+        onBlur={cancelPrefetch}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onClick(item);
+          }
+        }}
+        role="button"
+        tabIndex={0}
         className="group relative bg-jellyfin-card rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-jellyfin-accent transition-all duration-200 hover:scale-105 shadow-lg"
       >
         <div className="aspect-[2/3] w-full relative">
-            <img 
+            <ProgressiveImage
               src={imageUrl} 
               alt={item.Name} 
-              loading="lazy"
-              className="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
+              className="w-full h-full object-cover"
             />
+            <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
             
             {/* played icon */}
             {isPlayed && (
-                <div className="absolute top-2 right-2 bg-jellyfin-accent text-white rounded-full p-1 shadow-lg z-10" title="Vu">
+                <div className="absolute top-2 right-2 bg-jellyfin-accent text-white rounded-full p-1 shadow-lg z-10" title={t('watched')}>
                     <Check size={14} strokeWidth={3} />
                 </div>
             )}
@@ -45,7 +82,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item, serverUrl, viewMode,
             {/* badge number of episodes (series only) */}
              {item.Type === 'Series' && item.RecursiveItemCount && (
                 <div className="absolute top-2 left-2 bg-black/70 text-[10px] px-2 py-1 rounded text-white backdrop-blur-sm font-bold border border-white/10">
-                    {item.RecursiveItemCount} Éps
+                    {item.RecursiveItemCount} {t('episodes')}
                 </div>
             )}
             
@@ -70,14 +107,27 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item, serverUrl, viewMode,
   // List view
   return (
     <div 
-      onClick={() => onClick(item)}
+      onClick={() => { cancelPrefetch(); onClick(item); }}
+      onMouseEnter={schedulePrefetch}
+      onMouseLeave={cancelPrefetch}
+      onFocus={schedulePrefetch}
+      onBlur={cancelPrefetch}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick(item);
+        }
+      }}
+      role="button"
+      tabIndex={0}
       className="flex bg-jellyfin-card rounded-lg overflow-hidden cursor-pointer hover:bg-[#2a2a2a] transition-colors border border-transparent hover:border-gray-700 h-24 md:h-32 relative group"
     >
       <div className="h-full w-16 md:w-24 shrink-0 relative">
-        <img 
+        <ProgressiveImage
           src={imageUrl} 
           alt={item.Name} 
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : 'auto'}
           className="w-full h-full object-cover"
         />
         {/* played icon */}
@@ -98,9 +148,9 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item, serverUrl, viewMode,
         )}
         <div className="flex items-center gap-4 text-xs md:text-sm text-gray-400 mt-1">
            {duration && <span className="flex items-center"><Clock size={14} className="mr-1"/> {duration}</span>}
-           {item.Type === 'Series' && <span>{item.ChildCount} Saisons • {item.RecursiveItemCount} Épisodes</span>}
+           {item.Type === 'Series' && <span>{item.ChildCount} {t('seasons')} • {item.RecursiveItemCount} {t('episodes')}</span>}
         </div>
       </div>
     </div>
   );
-};
+});

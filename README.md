@@ -11,7 +11,8 @@ A lightweight, high-performance, and secure frontend interface for Jellyfin medi
 *   **Responsive Design:** Fully adaptive UI that works seamlessly on desktops, tablets, and mobile devices.
 *   **Advanced Metadata:** Enriches Jellyfin data with TMDB information, including cast/crew details, official trailers, and streaming provider availability.
 *   **Smart Filtering:** Filter content by genre, release year, and played status (Watched/Unwatched).
-*   **Shuffle Mode:** Randomly select movies or series episodes with options to exclude watched content.
+*   **Advanced Shuffle:** Randomly select a movie or series by keyword and one or more Jellyfin tags, with an option to exclude watched content.
+*   **Local Performance Metrics:** Core Web Vitals are measured without external telemetry and kept in browser storage for diagnostics.
 *   **Direct Playback:** Deep integration with Jellyfin's web player for immediate playback.
 
 ## Prerequisites
@@ -25,13 +26,17 @@ A lightweight, high-performance, and secure frontend interface for Jellyfin medi
 
 The application is designed to be deployed via Docker Compose for simplicity.
 
-### 1. Edit `.env` file
+### 1. Create the `.env` file
 
-Copy `.env.local` in `.env` and add your server url/tdb api key.
+```bash
+cp .env.example .env
+```
+
+Set `JELLYFIN_URL`, `APP_LANGUAGE`, and `TMDB_API_KEY` in `.env`.
 
 ### 2. Build and Run
 
-Run the container using Docker Compose. The `--build` flag ensures the environment variables are correctly baked into the application during the build process.
+Run the container using Docker Compose:
 
 ```bash
 docker-compose up -d --build
@@ -41,13 +46,12 @@ Access the application at `http://localhost:3000`.
 
 ## Configuration
 
-### Build Arguments (Dockerfile)
+### Build Arguments
 
 These variables are used during the build process to configure the React application.
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `JELLYFIN_URL` | The full URL of your Jellyfin server. | Required |
 | `APP_LANGUAGE` | The ISO 639-1 language code for the UI and metadata. | `fr` |
 
 ### Environment Variables (Runtime)
@@ -56,27 +60,53 @@ These variables are used by the Nginx container at runtime.
 
 | Variable | Description | Required |
 | :--- | :--- | :--- |
-| `TMDB_API_KEY` | Your The Movie Database API Key for metadata fetching. | Yes |
+| `JELLYFIN_URL` | Full URL of the Jellyfin server. | Yes |
+| `TMDB_API_KEY` | The Movie Database API key used by the Nginx proxy. | Recommended |
 
 ## Development
 
 To run the project locally without Docker for development purposes:
 
-1.  Clone the repository.
-2.  Install dependencies:
+1. Install dependencies:
+
     ```bash
     npm install
     ```
-3.  Create a `.env` file in the root directory:
+
+2. Create the local configuration:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Then edit `.env`:
+
     ```env
     JELLYFIN_URL=http://your-jellyfin-url:8096
-    # Note: In dev mode, you must temporarily hardcode the API key in App.tsx 
-    # or set up a local proxy, as the Nginx proxy is not active.
+    APP_LANGUAGE=fr
+    TMDB_API_KEY=your_tmdb_api_key
     ```
-4.  Start the development server:
+
+    Vite proxies `/tmdb` locally, so the TMDB key is never exposed to browser code.
+
+3. Start the development server:
+
     ```bash
     npm run dev
     ```
+
+    Open `http://localhost:3000`.
+
+4. Validate a production build when needed:
+
+    ```bash
+    npm run build
+    npm run preview
+    ```
+
+    The preview is available at the URL printed by Vite (usually `http://localhost:4173`).
+
+Core Web Vitals are logged in the browser console and stored under the `jellysterr_web_vitals` local-storage key. No metrics leave the browser.
 
 ## License
 

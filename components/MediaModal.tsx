@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { BaseItem, Person, WatchProvider, Video } from '../types';
-import { getImageUrl, fetchTmdbDetails, getSeasons, getItemDetails } from '../services/jellyfinService';
-import { X, Play, Star, Calendar, Clock, Users, Tv, Globe, Clapperboard, Link as LinkIcon, ExternalLink, Youtube, Tag } from 'lucide-react';
+import { fetchTmdbDetails, getImageUrl, getItemDetails, getSeasons, isAbortError } from '../services/jellyfinService';
+import { X, Play, Star, Calendar, Clock, Users, Tv, Globe, Clapperboard, Link as LinkIcon, Youtube, Tag } from 'lucide-react';
 import { t, currentLang } from '../src/i18n'; 
+import { ProgressiveImage } from './ProgressiveImage';
 
-interface MediaModalProps {
+export interface MediaModalProps {
   item: BaseItem | null;
   serverUrl: string;
+  token: string;
+  userId: string;
   onClose: () => void;
-  tmdbApiKey?: string;
 }
 
 const formatTicks = (ticks: number) => {
@@ -30,11 +32,11 @@ const getLanguageName = (code: string) => {
         const regionNames = new Intl.DisplayNames([currentLang], { type: 'language' });
         const name = regionNames.of(code);
         if(name) return name.charAt(0).toUpperCase() + name.slice(1);
-    } catch (e) {}
+    } catch {}
     return code.toUpperCase();
 }
 
-export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serverUrl, onClose, tmdbApiKey }) => {
+export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serverUrl, token, userId, onClose }) => {
   const [fullItem, setFullItem] = useState<BaseItem | null>(initialItem);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [tmdbData, setTmdbData] = useState<any>(null);
@@ -53,6 +55,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serve
 
   useEffect(() => {
     if (!initialItem) { setFullItem(null); return; }
+    const controller = new AbortController();
     setFullItem(initialItem);
     setTmdbData(null);
     setSeasons([]);
@@ -63,63 +66,65 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serve
     setPersonIdMap({});
     setLoadingDetails(true);
 
-    const userStr = localStorage.getItem('jellyfin_user');
-    const user = userStr ? JSON.parse(userStr) : null;
+    const loadDetails = async () => {
+      try {
+        const details = await getItemDetails(serverUrl, userId, token, initialItem.Id, controller.signal);
+        setFullItem(details);
 
-    if (user) {
-      getItemDetails(serverUrl, user.Id, user.Token, initialItem.Id)
-        .then(details => {
-          if (details) {
-            setFullItem(details);
-            const people = details.People || [];
-            setActors(people.filter(p => p.Type === 'Actor').slice(0, 15));
-            const dirs = people.filter(p => p.Type === 'Director');
-            const crew = people.filter(p => ['Producer', 'Writer', 'Creator'].includes(p.Type));
-            setDirectors(dirs.length > 0 ? dirs : crew.slice(0, 3));
+        const people = details.People || [];
+        setActors(people.filter(person => person.Type === 'Actor').slice(0, 15));
+        const directorsList = people.filter(person => person.Type === 'Director');
+        const crew = people.filter(person => ['Producer', 'Writer', 'Creator'].includes(person.Type));
+        setDirectors(directorsList.length > 0 ? directorsList : crew.slice(0, 3));
 
-            if (details.Type === 'Series') {
-              getSeasons(serverUrl, user.Id, user.Token, details.Id).then(setSeasons).catch(console.warn);
-            }
+        if (details.Type === 'Series') {
+          getSeasons(serverUrl, userId, token, details.Id, controller.signal)
+            .then(setSeasons)
+            .catch(error => { if (!isAbortError(error)) console.warn(error); });
+        }
 
-            if (details.ProviderIds?.Tmdb) {
-              const type = details.Type === 'Series' ? 'tv' : 'movie';
-              fetchTmdbDetails("", type, details.ProviderIds.Tmdb)
-                .then(data => {
-                  if (data) {
-                    setTmdbData(data);
-                    const region = currentLang.toUpperCase(); 
-                    const watchData = data['watch/providers']?.results?.[region] || data['watch/providers']?.results?.['US'];
-                    if (watchData?.flatrate) setProviders(watchData.flatrate);
+        if (details.ProviderIds?.Tmdb) {
+          const type = details.Type === 'Series' ? 'tv' : 'movie';
+          fetchTmdbDetails<any>(type, details.ProviderIds.Tmdb, controller.signal)
+            .then(data => {
+              if (!data) return;
+              setTmdbData(data);
+              const region = currentLang.toUpperCase();
+              const watchData = data['watch/providers']?.results?.[region] || data['watch/providers']?.results?.US;
+              if (watchData?.flatrate) setProviders(watchData.flatrate);
 
-                    if (data.videos?.results) {
-                        const vids = data.videos.results;
-                        const officialTrailer = vids.find((v: any) => v.type === "Trailer" && v.site === "YouTube" && v.official);
-                        const anyTrailer = vids.find((v: any) => v.type === "Trailer" && v.site === "YouTube");
-                        setTrailer(officialTrailer || anyTrailer || null);
-                    }
+              const videos = data.videos?.results || [];
+              const officialTrailer = videos.find((video: Video) => video.type === 'Trailer' && video.site === 'YouTube' && video.official);
+              const anyTrailer = videos.find((video: Video) => video.type === 'Trailer' && video.site === 'YouTube');
+              setTrailer(officialTrailer || anyTrailer || null);
 
-                    const map: Record<string, number> = {};
-                    const processCredits = (list: any[]) => list?.forEach((c: any) => {
-                        if (c.name && c.id) map[normalizeName(c.name)] = c.id;
-                    });
-                    if (data.created_by) processCredits(data.created_by);
-                    if (data.credits) { processCredits(data.credits.cast); processCredits(data.credits.crew); }
-                    setPersonIdMap(map);
-                  }
-                })
-                .catch(console.warn);
-            }
-          }
-        })
-        .finally(() => setLoadingDetails(false));
-    }
-  }, [initialItem, serverUrl]);
+              const map: Record<string, number> = {};
+              const processCredits = (list?: Array<{ id?: number; name?: string }>) => list?.forEach(credit => {
+                if (credit.name && credit.id) map[normalizeName(credit.name)] = credit.id;
+              });
+              processCredits(data.created_by);
+              processCredits(data.credits?.cast);
+              processCredits(data.credits?.crew);
+              setPersonIdMap(map);
+            })
+            .catch(error => { if (!isAbortError(error)) console.warn(error); });
+        }
+      } catch (error) {
+        if (!isAbortError(error)) console.warn(error);
+      } finally {
+        if (!controller.signal.aborted) setLoadingDetails(false);
+      }
+    };
+
+    void loadDetails();
+    return () => controller.abort();
+  }, [initialItem, serverUrl, token, userId]);
 
   if (!fullItem) return null;
 
   const backdropUrl = fullItem.BackdropImageTags?.[0] ? getImageUrl(serverUrl, fullItem.Id, fullItem.BackdropImageTags[0], 'Backdrop', 1280) : null;
-  const posterUrl = getImageUrl(serverUrl, fullItem.Id, fullItem.ImageTags?.Primary, 'Primary', 400) + "&quality=90&format=webp";
-  const year = fullItem.ProductionYear || 'N/A';
+  const posterUrl = getImageUrl(serverUrl, fullItem.Id, fullItem.ImageTags?.Primary, 'Primary', 360, 72);
+  const year = fullItem.ProductionYear || t('not_available');
   const description = fullItem.Overview || tmdbData?.overview || '...';
   
   const avgEpisodeTicks = fullItem.RunTimeTicks || 0;
@@ -148,12 +153,12 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serve
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
       <div className="bg-[#181818] rounded-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl relative border border-gray-800 flex flex-col" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 bg-black/60 rounded-full hover:bg-white/20 transition-colors text-white cursor-pointer"><X size={24}/></button>
+        <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 bg-black/60 rounded-full hover:bg-white/20 transition-colors text-white cursor-pointer" aria-label={t('close')}><X size={24}/></button>
 
         <div className="relative h-48 md:h-80 w-full shrink-0">
           {backdropUrl ? (
             <>
-              <img src={backdropUrl} alt="Backdrop" className="w-full h-full object-cover" />
+              <img src={backdropUrl} alt={`${t('backdrop_alt')}: ${fullItem.Name}`} className="w-full h-full object-cover" decoding="async" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-[#181818]/40 to-transparent"></div>
             </>
           ) : <div className="w-full h-full bg-gradient-to-br from-jellyfin-accent to-purple-900" />}
@@ -166,7 +171,9 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serve
 
         <div className="p-6 md:p-8 grid md:grid-cols-[250px_1fr] gap-8 overflow-x-hidden">
           <div className="hidden md:block shrink-0">
-            <img src={posterUrl} className="rounded-lg shadow-lg w-full object-cover aspect-[2/3]" alt="Poster" />
+            <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-gray-800 shadow-lg">
+              <ProgressiveImage src={posterUrl} className="h-full w-full object-cover" alt={`${t('poster_alt')}: ${fullItem.Name}`} />
+            </div>
             <button onClick={handlePlay} className="mt-4 w-full bg-jellyfin-accent hover:bg-jellyfin-hover text-white px-4 py-3 rounded font-bold flex items-center justify-center transition-colors shadow-lg"><Play fill="currentColor" className="mr-2" size={20} /> {t('play')}</button>
             {trailer && (<a href={`https://www.youtube.com/watch?v=${trailer.key}`} target="_blank" rel="noreferrer" className="mt-3 w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-bold flex items-center justify-center transition-colors shadow-lg text-sm"><Youtube className="mr-2" size={20} /> {t('trailer')}</a>)}
             <div className="flex justify-center gap-3 mt-6 flex-wrap items-center">
@@ -180,7 +187,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serve
                     <div className="flex flex-wrap justify-center gap-2">
                         {providers.map(p => (
                             <a key={p.provider_id} href={`https://www.themoviedb.org/${tmdbType}/${tmdbId}/watch`} target="_blank" rel="noreferrer" title={`${t('view_on')} ${p.provider_name}`} className="relative group hover:scale-110 transition-transform">
-                                <img src={`https://image.tmdb.org/t/p/original${p.logo_path}`} alt={p.provider_name} className="w-10 h-10 rounded-lg shadow-md" />
+                                <img src={`https://image.tmdb.org/t/p/w92${p.logo_path}`} alt={p.provider_name} className="w-10 h-10 rounded-lg shadow-md" loading="lazy" decoding="async" />
                             </a>
                         ))}
                     </div>
@@ -232,7 +239,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serve
                   {actors.map(person => (
                     <a key={person.Id} href={getPersonLink(person.Name)} target="_blank" rel="noreferrer" className="w-20 md:w-24 shrink-0 text-center group block">
                       <div className="w-20 h-20 md:w-24 md:h-24 mx-auto mb-2 rounded-full overflow-hidden bg-gray-800 border-2 border-transparent group-hover:border-jellyfin-accent transition-all relative">
-                        {person.PrimaryImageTag ? <img src={getImageUrl(serverUrl, person.Id, person.PrimaryImageTag, 'Primary', 150)} className="w-full h-full object-cover" alt={person.Name} loading="lazy" /> : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No IMG</div>}
+                        {person.PrimaryImageTag ? <img src={getImageUrl(serverUrl, person.Id, person.PrimaryImageTag, 'Primary', 150)} className="w-full h-full object-cover" alt={person.Name} loading="lazy" decoding="async" /> : <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">{t('image_unavailable')}</div>}
                       </div>
                       <p className="text-xs font-medium text-white truncate group-hover:text-jellyfin-accent">{person.Name}</p>
                       <p className="text-[10px] text-gray-400 truncate">{person.Role}</p>
@@ -244,7 +251,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item: initialItem, serve
 
             {fullItem.Tags && fullItem.Tags.length > 0 && (
                 <div className="pt-4 border-t border-gray-800">
-                    <h4 className="text-sm font-bold text-gray-400 mb-3 flex items-center"><Tag size={16} className="mr-2" /> Tags</h4>
+                    <h4 className="text-sm font-bold text-gray-400 mb-3 flex items-center"><Tag size={16} className="mr-2" /> {t('tags')}</h4>
                     <div className="flex flex-wrap gap-2">
                         {fullItem.Tags.map(tag => (<span key={tag} className="px-3 py-1 bg-gray-800 text-gray-300 text-xs rounded-full border border-gray-700 cursor-default hover:border-gray-500">{tag}</span>))}
                     </div>

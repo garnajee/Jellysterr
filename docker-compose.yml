@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        APP_LANGUAGE: ${APP_LANGUAGE:-fr}
     environment:
       - JELLYFIN_URL=${JELLYFIN_URL}
       - APP_LANGUAGE=${APP_LANGUAGE}
